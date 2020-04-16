@@ -10,7 +10,9 @@ use {
     error::Error,
 };
 
-pub async fn get_contents(path: &Path) -> Result<Vec<PathBuf>, Error> {
+pub type Contents = Vec<PathBuf>;
+
+pub async fn get_contents(path: &Path) -> Result<Contents, Error> {
     match read_dir(path).await {
         Ok(mut stream) => {
             let mut contents = vec![];
