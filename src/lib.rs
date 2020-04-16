@@ -11,21 +11,29 @@ use {
 };
 
 pub async fn get_contents(path: &Path) -> Result<Vec<PathBuf>, Error> {
-    let mut stream = read_dir(path).await.map_err(|e| {
-        match e.kind() {
-            ErrorKind::NotFound => Error::NF(e, path.to_owned()),
-            ErrorKind::PermissionDenied => Error::PD(e, path.to_owned()),
-            _ => Error::IO(e, path.to_owned()),
+    match read_dir(path).await {
+        Ok(mut stream) => {
+            let mut contents = vec![];
+            while let Some(dir_entry) = stream.next().await {
+                let dir_entry = dir_entry.map_err(|e| {
+                    Error::IO(e, path.to_owned())
+                });
+                contents.push(dir_entry?.path());
+            }
+
+            Ok(contents)
+
         }
-    })?;
-
-    let mut contents = vec![];
-    while let Some(dir_entry) = stream.next().await {
-        let dir_entry = dir_entry.map_err(|e| {
-            Error::IO(e, path.to_owned())
-        });
-        contents.push(dir_entry?.path());
+        Err(e) => {
+            let path = path.to_owned();
+            match e.kind() {
+                ErrorKind::NotFound => Err(Error::NF(e, path)),
+                ErrorKind::PermissionDenied => Err(Error::PD(e, path)),
+                ErrorKind::Other if e.to_string().starts_with("Not a directory") => {
+                    Ok(vec![path])
+                }
+                _ => Err(Error::IO(e, path))
+            }
+        }
     }
-
-    Ok(contents)
 }
