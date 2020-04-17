@@ -3,7 +3,7 @@ use {
 
     structopt::StructOpt,
 
-    ls::{Contents, get_contents},
+    ls::{Contents, get_contents, filter_hidden},
 };
 
 #[derive(StructOpt)]
@@ -21,11 +21,15 @@ struct Opt {
 async fn main() -> Result<(), failure::Error> {
     let opt = Opt::from_args();
     
-    let contents = if let Some(file) = &opt.file {
-        get_contents(file.as_path(), opt.all).await?
+    let mut contents = if let Some(file) = &opt.file {
+        get_contents(file.as_path()).await?
     } else {
-        get_contents(Path::new("."), opt.all).await?
+        get_contents(Path::new(".")).await?
     };
+
+    if !opt.all {
+        filter_hidden(&mut contents);
+    }
 
     println!("{}", fmt(&contents));
 
@@ -33,10 +37,7 @@ async fn main() -> Result<(), failure::Error> {
 }
 
 fn fmt(contents: &Contents) -> String {
-    let mut filenames = contents.iter()
+    contents.iter()
         .map(|c| format!("{}", c.file_name().unwrap().to_str().unwrap()))
-        .collect::<Vec<_>>();
-    
-    filenames.sort();
-    filenames.join("  ")
+        .collect::<Vec<_>>().join("  ")
 }

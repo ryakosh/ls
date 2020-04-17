@@ -12,27 +12,16 @@ use {
 
 pub type Contents = Vec<PathBuf>;
 
-pub async fn get_contents(path: &Path, all: bool) -> Result<Contents, failure::Error> {
+pub async fn get_contents(path: &Path) -> Result<Contents, failure::Error> {
     match read_dir(path).await {
         Ok(mut stream) => {
             let mut contents = vec![];
 
-            if all {
-                while let Some(dir_entry) = stream.next().await {
-                    let dir_entry = dir_entry?;
-
-                    contents.push(dir_entry.path());
-                }
-            } else {
-                while let Some(dir_entry) = stream.next().await {
-                    let dir_entry = dir_entry?;
-
-                    if !dir_entry.file_name().to_str().unwrap().starts_with('.') {
-                        contents.push(dir_entry.path());
-                    }
-                }
+            while let Some(dir_entry) = stream.next().await {
+                contents.push(dir_entry?.path());
             }
 
+            contents.sort();
             Ok(contents)
 
         }
@@ -48,4 +37,12 @@ pub async fn get_contents(path: &Path, all: bool) -> Result<Contents, failure::E
             }
         }
     }
+}
+
+pub fn filter_hidden(contents: &mut Contents) {
+    contents.retain(is_not_hidden);
+}
+
+fn is_not_hidden(p: &PathBuf) -> bool {
+    !p.file_name().unwrap().to_str().unwrap().starts_with(".")
 }
