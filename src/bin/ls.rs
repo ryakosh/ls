@@ -2,6 +2,7 @@ use {
     ls::{filter_hidden, get_contents, RefContents},
     std::path::{Path, PathBuf},
     structopt::StructOpt,
+    exitfailure::ExitFailure,
 };
 
 #[derive(StructOpt)]
@@ -16,7 +17,7 @@ struct Opt {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), failure::Error> {
+async fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
 
     let mut contents = if let Some(file) = &opt.file {
