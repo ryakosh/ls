@@ -9,6 +9,7 @@ use {
 };
 
 pub type Contents = Vec<PathBuf>;
+pub type RefContents = [PathBuf];
 
 pub async fn get_contents(path: &Path) -> Result<Contents, failure::Error> {
     match read_dir(path).await {
@@ -39,5 +40,5 @@ pub fn filter_hidden(contents: &mut Contents) {
 }
 
 fn is_not_hidden(p: &PathBuf) -> bool {
-    !p.file_name().unwrap().to_str().unwrap().starts_with(".")
+    !p.file_name().unwrap().to_str().unwrap().starts_with('.')
 }

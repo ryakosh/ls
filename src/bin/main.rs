@@ -1,5 +1,5 @@
 use {
-    ls::{filter_hidden, get_contents, Contents},
+    ls::{filter_hidden, get_contents, RefContents},
     std::path::{Path, PathBuf},
     structopt::StructOpt,
 };
@@ -34,10 +34,10 @@ async fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
-fn fmt(contents: &Contents) -> String {
+fn fmt(contents: &RefContents) -> String {
     contents
         .iter()
-        .map(|c| format!("{}", c.file_name().unwrap().to_str().unwrap()))
+        .map(|c| c.file_name().unwrap().to_str().unwrap())
         .collect::<Vec<_>>()
         .join("  ")
 }
