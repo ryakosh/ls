@@ -1,9 +1,7 @@
 use {
+    ls::{filter_hidden, get_contents, Contents},
     std::path::{Path, PathBuf},
-
     structopt::StructOpt,
-
-    ls::{Contents, get_contents, filter_hidden},
 };
 
 #[derive(StructOpt)]
@@ -20,7 +18,7 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
     let opt = Opt::from_args();
-    
+
     let mut contents = if let Some(file) = &opt.file {
         get_contents(file.as_path()).await?
     } else {
@@ -37,7 +35,9 @@ async fn main() -> Result<(), failure::Error> {
 }
 
 fn fmt(contents: &Contents) -> String {
-    contents.iter()
+    contents
+        .iter()
         .map(|c| format!("{}", c.file_name().unwrap().to_str().unwrap()))
-        .collect::<Vec<_>>().join("  ")
+        .collect::<Vec<_>>()
+        .join("  ")
 }

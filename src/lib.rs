@@ -1,13 +1,11 @@
 pub mod error;
 
 use {
-    std::path::{Path, PathBuf},
-    std::io::ErrorKind,
-
-    tokio::fs::read_dir,
-    futures::StreamExt,
-
     error::Error,
+    futures::StreamExt,
+    std::io::ErrorKind,
+    std::path::{Path, PathBuf},
+    tokio::fs::read_dir,
 };
 
 pub type Contents = Vec<PathBuf>;
@@ -23,17 +21,14 @@ pub async fn get_contents(path: &Path) -> Result<Contents, failure::Error> {
 
             contents.sort();
             Ok(contents)
-
         }
         Err(e) => {
             let path = path.to_owned();
             match e.kind() {
                 ErrorKind::NotFound => Err(Error::NF(e, path).into()),
                 ErrorKind::PermissionDenied => Err(Error::PD(e, path).into()),
-                ErrorKind::Other if e.to_string().starts_with("Not a directory") => {
-                    Ok(vec![path])
-                }
-                _ => Err(e.into())
+                ErrorKind::Other if e.to_string().starts_with("Not a directory") => Ok(vec![path]),
+                _ => Err(e.into()),
             }
         }
     }

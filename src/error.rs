@@ -1,10 +1,4 @@
-use {
-    std::io,
-    std::path::PathBuf,
-
-    failure::Fail
-};
-
+use {failure::Fail, std::io, std::path::PathBuf};
 
 #[derive(Fail, Debug)]
 pub enum Error {
