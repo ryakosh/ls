@@ -12,6 +12,9 @@ struct Opt {
     #[structopt(parse(from_os_str))]
     /// The file to list information about
     file: Option<PathBuf>,
+    #[structopt(short, long)]
+    /// do not ignore entries starting with .
+    all: bool,
 }
 
 #[tokio::main]
@@ -19,13 +22,12 @@ async fn main() -> Result<(), failure::Error> {
     let opt = Opt::from_args();
     
     let contents = if let Some(file) = &opt.file {
-        get_contents(file.as_path()).await?
+        get_contents(file.as_path(), opt.all).await?
     } else {
-        get_contents(Path::new(".")).await?
+        get_contents(Path::new("."), opt.all).await?
     };
 
     println!("{}", fmt(&contents));
-
 
     Ok(())
 }

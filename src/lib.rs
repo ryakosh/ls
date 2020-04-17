@@ -12,7 +12,7 @@ use {
 
 pub type Contents = Vec<PathBuf>;
 
-pub async fn get_contents(path: &Path) -> Result<Contents, Error> {
+pub async fn get_contents(path: &Path, all: bool) -> Result<Contents, Error> {
     match read_dir(path).await {
         Ok(mut stream) => {
             let mut contents = vec![];
@@ -20,7 +20,17 @@ pub async fn get_contents(path: &Path) -> Result<Contents, Error> {
                 let dir_entry = dir_entry.map_err(|e| {
                     Error::IO(e, path.to_owned())
                 });
-                contents.push(dir_entry?.path());
+
+                let dir_entry = dir_entry?;
+
+                if all {
+                    contents.push(dir_entry.path());
+
+                } else {
+                    if !dir_entry.file_name().to_str().unwrap().starts_with('.') {
+                        contents.push(dir_entry.path());
+                    }
+                }
             }
 
             Ok(contents)
