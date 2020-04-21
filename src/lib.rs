@@ -86,7 +86,7 @@ pub fn get_type(meta: &Metadata) -> FileType {
 }
 
 pub fn get_permissions(meta: &Metadata) -> umask::Mode {
-    umask::Mode::from(meta.mode() % 1000)
+    umask::Mode::from(meta.mode() & 0b111111111) // Take only bits corresponding to permissions
 }
 
 pub fn get_hlink_num(meta: &Metadata) -> u64 {
