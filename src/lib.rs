@@ -108,3 +108,15 @@ pub fn get_size(meta: &Metadata) -> u64 {
 pub fn get_modified(meta: &Metadata) -> DateTime<Local> {
     Local.timestamp(meta.mtime(), 0)
 }
+
+pub fn get_long(meta: &Metadata) -> String {
+    format!("{}{} {} {} {} {} {}",
+        get_type(meta),
+        get_permissions(meta),
+        get_hlink_num(meta),
+        get_user(meta).name().to_str().unwrap(),
+        get_group(meta).name().to_str().unwrap(),
+        get_size(meta).to_string(),
+        get_modified(meta).format("%b %e %H:%M"),
+    )
+}
