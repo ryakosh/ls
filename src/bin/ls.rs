@@ -1,5 +1,5 @@
 use {
-    ls::{filter_hidden, get_contents, RefContents},
+    ls::*,
     std::path::{Path, PathBuf},
     structopt::StructOpt,
     exitfailure::ExitFailure,
@@ -14,31 +14,45 @@ struct Opt {
     #[structopt(short, long)]
     /// do not ignore entries starting with .
     all: bool,
+    #[structopt(short)]
+    /// use a long listing format
+    long: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
 
-    let mut contents = if let Some(file) = &opt.file {
-        get_contents(file.as_path()).await?
+    let mut files = if let Some(file) = &opt.file {
+        get_files(file.as_path()).await?
     } else {
-        get_contents(Path::new(".")).await?
+        get_files(Path::new(".")).await?
     };
 
     if !opt.all {
-        filter_hidden(&mut contents);
+        filter_hidden(&mut files);
     }
 
-    println!("{}", fmt(&contents));
+    if !opt.long {
+        println!("{}", fmt(&files));
+    } else {
+        print!("{}", fmt_l(&files));
+    }
 
     Ok(())
 }
 
-fn fmt(contents: &RefContents) -> String {
-    contents
+fn fmt(files: &RefFiles) -> String {
+    files
         .iter()
-        .map(|c| c.file_name().unwrap().to_str().unwrap())
+        .map(File::file_name)
         .collect::<Vec<_>>()
         .join("  ")
+}
+
+fn fmt_l(files: &RefFiles) -> String {
+    files
+        .iter()
+        .map(|f| format!("{} \n", f.long_fmt()))
+        .collect()
 }

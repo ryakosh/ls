@@ -5,16 +5,16 @@ use {
     futures::StreamExt,
     std::io::ErrorKind,
     std::path::{Path, PathBuf},
+    std::cmp,
     tokio::fs::read_dir,
     std::os::unix::fs::MetadataExt,
     std::fmt,
     std::fs::Metadata,
-    users::{User, Group, get_user_by_uid, get_group_by_gid},
-    chrono::{Local, DateTime, TimeZone},
+    chrono::TimeZone
 };
 
-pub type Contents = Vec<PathBuf>;
-pub type RefContents = [PathBuf];
+pub type Files = Vec<File>;
+pub type RefFiles = [File];
 
 pub enum FileType {
     File,
@@ -25,98 +25,143 @@ pub enum FileType {
 
 impl fmt::Display for FileType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use FileType::*;
-
-        let mut type_specifier = match self {
-            File => "-",
-            Dir => "d",
-            Sym => "l",
-            Unk => "?", // Unkown type TODO: Change this
+        let type_specifier = match self {
+            FileType::File => "-",
+            FileType::Dir => "d",
+            FileType::Sym => "l",
+            FileType::Unk => "?", // Unkown type TODO: Change this
         };
 
         write!(f, "{}", type_specifier)
     }
 }
 
-pub async fn get_contents(path: &Path) -> Result<Contents, failure::Error> {
+pub async fn get_files(path: &Path) -> Result<Files, failure::Error> {
     match read_dir(path).await {
         Ok(mut stream) => {
-            let mut contents = vec![];
+            let mut files = vec![];
 
             while let Some(dir_entry) = stream.next().await {
-                contents.push(dir_entry?.path());
+                files.push(File::new(dir_entry?.path())?);
             }
 
-            contents.sort();
-            Ok(contents)
+            files.sort();
+            Ok(files)
         }
         Err(e) => {
-            let path = path.to_owned();
+            let file = File::new(path.to_owned())?;
             match e.kind() {
-                ErrorKind::NotFound => Err(Error::NF(e, path).into()),
-                ErrorKind::PermissionDenied => Err(Error::PD(e, path).into()),
-                ErrorKind::Other if e.to_string().starts_with("Not a directory") => Ok(vec![path]),
+                ErrorKind::NotFound => Err(Error::NF(e, file).into()),
+                ErrorKind::PermissionDenied => Err(Error::PD(e, file).into()),
+                ErrorKind::Other if e.to_string().starts_with("Not a directory") => Ok(vec![file]),
                 _ => Err(e.into()),
             }
         }
     }
 }
 
-pub fn filter_hidden(contents: &mut Contents) {
-    contents.retain(is_not_hidden);
+pub fn filter_hidden(files: &mut Files) {
+    files.retain(is_not_hidden);
 }
 
-fn is_not_hidden(p: &PathBuf) -> bool {
-    !p.file_name().unwrap().to_str().unwrap().starts_with('.')
+fn is_not_hidden(f: &File) -> bool {
+    !f.file_name().starts_with('.')
+}
+#[derive(Debug)]
+pub struct File {
+    pathbuf: PathBuf,
+    metadata: Metadata,
+    file_name: String,
 }
 
-pub fn get_type(meta: &Metadata) -> FileType {
-    use FileType::*;
+impl File {
+    pub fn new(pathbuf: PathBuf) -> Result<Self, failure::Error> {
+        Ok(Self {
+            metadata: pathbuf.metadata()?,
+            file_name: pathbuf.file_name().unwrap().to_str().unwrap().to_string(),
+            pathbuf,
+        })
+    }
 
-    let file_type = meta.file_type();
-    if file_type.is_file() {
-        File
-    } else if file_type.is_dir() {
-        Dir
-    } else if file_type.is_symlink() {
-        Sym
-    } else {
-        Unk
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    pub fn file_type(&self) -> FileType {
+        let ft = self.metadata.file_type();
+
+        if ft.is_file() {
+            FileType::File
+        } else if ft.is_dir() {
+            FileType::Dir
+        } else if ft.is_symlink() {
+            FileType::Sym
+        } else {
+            FileType::Unk
+        }
+    }
+
+    pub fn permissions(&self) -> umask::Mode {
+        umask::Mode::from(self.metadata.mode() & 0b111111111) // Take only bits corresponding to permissions
+    }
+
+    pub fn hlink_num(&self) -> u64 {
+        self.metadata.nlink()
+    }
+
+    pub fn user(&self) -> users::User {
+        users::get_user_by_uid(self.metadata.uid()).unwrap() // TODO: Better error handling
+    }
+
+    pub fn group(&self) -> users::Group {
+        users::get_group_by_gid(self.metadata.gid()).unwrap() // TODO: Better error handling
+    }
+
+    pub fn size(&self) -> u64 {
+        self.metadata.size()
+    }
+
+    pub fn modified(&self) -> chrono::DateTime<chrono::Local> {
+        chrono::Local.timestamp(self.metadata.mtime(), 0)
+    }
+
+    pub fn pathbuf(&self) -> &PathBuf {
+        &self.pathbuf
+    }
+
+    pub fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+
+    pub fn long_fmt(&self) -> String {
+        format!("{}{} {} {} {} {} {} {}",
+            self.file_type(),
+            self.permissions(),
+            self.hlink_num(),
+            self.user().name().to_str().unwrap(),
+            self.group().name().to_str().unwrap(),
+            self.size().to_string(),
+            self.modified().format("%b %e %H:%M"),
+            self.file_name(),
+        )
     }
 }
 
-pub fn get_permissions(meta: &Metadata) -> umask::Mode {
-    umask::Mode::from(meta.mode() & 0b111111111) // Take only bits corresponding to permissions
+impl cmp::PartialEq for File {
+    fn eq(&self, other: &Self) -> bool {
+        self.pathbuf() == other.pathbuf()
+    }
+}
+impl cmp::Eq for File {}
+
+impl cmp::PartialOrd for File {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
-pub fn get_hlink_num(meta: &Metadata) -> u64 {
-    meta.nlink()
-}
-
-pub fn get_user(meta: &Metadata) -> User {
-    get_user_by_uid(meta.uid()).unwrap() // TODO: Better error handling
-}
-
-pub fn get_group(meta: &Metadata) -> Group {
-    get_group_by_gid(meta.gid()).unwrap() // TODO: Better error handling
-}
-
-pub fn get_size(meta: &Metadata) -> u64 {
-    meta.size()
-}
-
-pub fn get_modified(meta: &Metadata) -> DateTime<Local> {
-    Local.timestamp(meta.mtime(), 0)
-}
-
-pub fn get_long(meta: &Metadata) -> String {
-    format!("{}{} {} {} {} {} {}",
-        get_type(meta),
-        get_permissions(meta),
-        get_hlink_num(meta),
-        get_user(meta).name().to_str().unwrap(),
-        get_group(meta).name().to_str().unwrap(),
-        get_size(meta).to_string(),
-        get_modified(meta).format("%b %e %H:%M"),
-    )
+impl cmp::Ord for File {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.pathbuf().cmp(other.pathbuf())
+    }
 }
