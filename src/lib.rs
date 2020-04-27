@@ -13,9 +13,6 @@ use {
     chrono::TimeZone
 };
 
-pub type Files = Vec<File>;
-pub type RefFiles = [File];
-
 pub enum FileType {
     File,
     Dir,
@@ -35,37 +32,69 @@ impl fmt::Display for FileType {
         write!(f, "{}", type_specifier)
     }
 }
+#[derive(Debug)]
+pub struct Files(Vec<File>);
 
-pub async fn get_files(path: &Path) -> Result<Files, failure::Error> {
-    match read_dir(path).await {
-        Ok(mut stream) => {
-            let mut files = vec![];
-
-            while let Some(dir_entry) = stream.next().await {
-                files.push(File::new(dir_entry?.path())?);
+impl Files {
+    pub async fn new(path: &Path) -> Result<Self, failure::Error> {
+        match read_dir(path).await {
+            Ok(mut stream) => {
+                let mut files = vec![];
+    
+                while let Some(dir_entry) = stream.next().await {
+                    files.push(File::new(dir_entry?.path())?);
+                }
+    
+                files.sort();
+                Ok(Self(files))
             }
-
-            files.sort();
-            Ok(files)
-        }
-        Err(e) => {
-            let file = File::new(path.to_owned())?;
-            match e.kind() {
-                ErrorKind::NotFound => Err(Error::NF(e, file).into()),
-                ErrorKind::PermissionDenied => Err(Error::PD(e, file).into()),
-                ErrorKind::Other if e.to_string().starts_with("Not a directory") => Ok(vec![file]),
-                _ => Err(e.into()),
+            Err(e) => {
+                let file = File::new(path.to_owned())?;
+                match e.kind() {
+                    ErrorKind::NotFound => Err(Error::NF(e, file).into()),
+                    ErrorKind::PermissionDenied => Err(Error::PD(e, file).into()),
+                    ErrorKind::Other if e.to_string().starts_with("Not a directory") => Ok(Self(vec![file])),
+                    _ => Err(e.into()),
+                }
             }
         }
     }
+
+    pub fn filter_hidden(&mut self) {
+        self.as_vec_mut().retain(|f| !f.is_hidden());
+    }
+
+    pub fn as_vec(&self) -> &Vec<File> {
+        &self.0
+    }
+
+    pub fn as_vec_mut(&mut self) -> &mut Vec<File> {
+        &mut self.0
+    }
+
+    pub fn long_fmt(&self) -> String {
+        self
+            .as_vec()
+            .iter()
+            .map(|f| format!("{} \n", f.long_fmt()))
+            .collect::<String>()
+            .trim_end()
+            .to_string()
+    }
 }
 
-pub fn filter_hidden(files: &mut Files) {
-    files.retain(is_not_hidden);
-}
+impl fmt::Display for Files {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let files = self
+            .as_vec()
+            .iter()
+            .map(|f| format!("{} ", f.to_string()))
+            .collect::<String>()
+            .trim_end()
+            .to_string();
 
-fn is_not_hidden(f: &File) -> bool {
-    !f.file_name().starts_with('.')
+        write!(f, "{}", files)
+    }
 }
 #[derive(Debug)]
 pub struct File {
@@ -145,6 +174,10 @@ impl File {
             self.file_name(),
         )
     }
+
+    fn is_hidden(&self) -> bool {
+        self.file_name().starts_with('.')
+    }
 }
 
 impl cmp::PartialEq for File {
@@ -163,5 +196,11 @@ impl cmp::PartialOrd for File {
 impl cmp::Ord for File {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.pathbuf().cmp(other.pathbuf())
+    }
+}
+
+impl fmt::Display for File {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.file_name())
     }
 }

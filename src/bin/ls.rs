@@ -24,35 +24,20 @@ async fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
 
     let mut files = if let Some(file) = &opt.file {
-        get_files(file.as_path()).await?
+        Files::new(file.as_path()).await?
     } else {
-        get_files(Path::new(".")).await?
+        Files::new(Path::new(".")).await?
     };
 
     if !opt.all {
-        filter_hidden(&mut files);
+        files.filter_hidden();
     }
 
     if !opt.long {
-        println!("{}", fmt(&files));
+        println!("{}", files);
     } else {
-        print!("{}", fmt_l(&files));
+        println!("{}", files.long_fmt());
     }
 
     Ok(())
-}
-
-fn fmt(files: &RefFiles) -> String {
-    files
-        .iter()
-        .map(File::file_name)
-        .collect::<Vec<_>>()
-        .join("  ")
-}
-
-fn fmt_l(files: &RefFiles) -> String {
-    files
-        .iter()
-        .map(|f| format!("{} \n", f.long_fmt()))
-        .collect()
 }
