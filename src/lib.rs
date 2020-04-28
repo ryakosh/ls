@@ -2,16 +2,8 @@ pub mod error;
 pub mod util;
 
 use {
-    error::Error,
-    futures::StreamExt,
-    std::io::ErrorKind,
-    std::path::{Path, PathBuf},
-    std::cmp,
-    tokio::fs::read_dir,
-    std::os::unix::fs::MetadataExt,
-    std::fmt,
-    std::fs::Metadata,
-    chrono::TimeZone
+    chrono::TimeZone as _, error::Error, futures::StreamExt as _, std::cmp, std::fmt, std::fs,
+    std::io, std::os::unix::fs::MetadataExt as _, std::path, tokio::fs::read_dir as tokio_read_dir,
 };
 
 pub enum FileType {
@@ -37,24 +29,26 @@ impl fmt::Display for FileType {
 pub struct Files(Vec<File>);
 
 impl Files {
-    pub async fn new(path: &Path) -> Result<Self, failure::Error> {
-        match read_dir(path).await {
+    pub async fn new(path: &path::Path) -> Result<Self, failure::Error> {
+        match tokio_read_dir(path).await {
             Ok(mut stream) => {
                 let mut files = vec![];
-    
+
                 while let Some(dir_entry) = stream.next().await {
                     files.push(File::new(dir_entry?.path())?);
                 }
-    
+
                 files.sort();
                 Ok(Self(files))
             }
             Err(e) => {
                 let file = File::new(path.to_owned())?;
                 match e.kind() {
-                    ErrorKind::NotFound => Err(Error::NF(e, file).into()),
-                    ErrorKind::PermissionDenied => Err(Error::PD(e, file).into()),
-                    ErrorKind::Other if e.to_string().starts_with("Not a directory") => Ok(Self(vec![file])),
+                    io::ErrorKind::NotFound => Err(Error::NF(e, file).into()),
+                    io::ErrorKind::PermissionDenied => Err(Error::PD(e, file).into()),
+                    io::ErrorKind::Other if e.to_string().starts_with("Not a directory") => {
+                        Ok(Self(vec![file]))
+                    }
                     _ => Err(e.into()),
                 }
             }
@@ -77,33 +71,31 @@ impl Files {
         let bfs = self.biggest_file_size();
         let bfh = self.biggest_file_hlink();
 
-        self
-            .as_vec()
+        self.as_vec()
             .iter()
-            .map(|f| format!("{} \n", f.long_fmt(util::count_digits(bfh), util::count_digits(bfs))))
+            .map(|f| {
+                format!(
+                    "{} \n",
+                    f.long_fmt(util::count_digits(bfh), util::count_digits(bfs))
+                )
+            })
             .collect::<String>()
             .trim_end()
             .to_string()
     }
 
     pub fn biggest_file_size(&self) -> u64 {
-        self
-            .as_vec()
+        self.as_vec()
             .iter()
-            .max_by(|&a, b| {
-                a.size().cmp(&b.size())
-            })
+            .max_by(|&a, b| a.size().cmp(&b.size()))
             .unwrap()
             .size()
     }
 
     pub fn biggest_file_hlink(&self) -> u64 {
-        self
-            .as_vec()
+        self.as_vec()
             .iter()
-            .max_by(|&a, b| {
-                a.hlink_num().cmp(&b.hlink_num())
-            })
+            .max_by(|&a, b| a.hlink_num().cmp(&b.hlink_num()))
             .unwrap()
             .hlink_num()
     }
@@ -124,13 +116,13 @@ impl fmt::Display for Files {
 }
 #[derive(Debug)]
 pub struct File {
-    pathbuf: PathBuf,
-    metadata: Metadata,
+    pathbuf: path::PathBuf,
+    metadata: fs::Metadata,
     file_name: String,
 }
 
 impl File {
-    pub fn new(pathbuf: PathBuf) -> Result<Self, failure::Error> {
+    pub fn new(pathbuf: path::PathBuf) -> Result<Self, failure::Error> {
         Ok(Self {
             metadata: pathbuf.metadata()?,
             file_name: pathbuf.file_name().unwrap().to_str().unwrap().to_string(),
@@ -157,7 +149,7 @@ impl File {
     }
 
     pub fn permissions(&self) -> umask::Mode {
-        umask::Mode::from(self.metadata.mode() & 0b111111111) // Take only bits corresponding to permissions
+        umask::Mode::from(self.metadata.mode() & 0b1_1111_1111) // Take only bits corresponding to permissions
     }
 
     pub fn hlink_num(&self) -> u64 {
@@ -180,16 +172,17 @@ impl File {
         chrono::Local.timestamp(self.metadata.mtime(), 0)
     }
 
-    pub fn pathbuf(&self) -> &PathBuf {
+    pub fn pathbuf(&self) -> &path::PathBuf {
         &self.pathbuf
     }
 
-    pub fn metadata(&self) -> &Metadata {
+    pub fn metadata(&self) -> &fs::Metadata {
         &self.metadata
     }
 
     pub fn long_fmt(&self, hlpad: usize, slpad: usize) -> String {
-        format!("{}{} {} {} {} {} {} {}",
+        format!(
+            "{}{} {} {} {} {} {} {}",
             self.file_type(),
             self.permissions(),
             format!("{:>width$}", self.hlink_num(), width = hlpad),

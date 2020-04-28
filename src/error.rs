@@ -1,6 +1,6 @@
-use {failure::Fail, std::io, crate::File};
+use {crate::File, failure::Fail as FailureFail, std::io};
 
-#[derive(Fail, Debug)]
+#[derive(FailureFail, Debug)]
 pub enum Error {
     #[fail(display = "ls: cannot access '{:?}': No such file or directory", _1)]
     NF(#[fail(cause)] io::Error, File),
