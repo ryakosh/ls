@@ -221,7 +221,15 @@ impl cmp::PartialOrd for File {
 
 impl cmp::Ord for File {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.pathbuf().cmp(other.pathbuf())
+        let normalize = |f: &File| {
+            if !f.is_hidden() {
+                f.file_name().to_lowercase()
+            } else {
+                f.file_name().to_lowercase()[1..].into()
+            }
+        };
+
+        normalize(self).cmp(&normalize(other))
     }
 }
 
