@@ -1,4 +1,5 @@
 pub mod error;
+pub mod util;
 
 use {
     error::Error,
@@ -73,13 +74,38 @@ impl Files {
     }
 
     pub fn long_fmt(&self) -> String {
+        let bfs = self.biggest_file_size();
+        let bfh = self.biggest_file_hlink();
+
         self
             .as_vec()
             .iter()
-            .map(|f| format!("{} \n", f.long_fmt()))
+            .map(|f| format!("{} \n", f.long_fmt(util::count_digits(bfh), util::count_digits(bfs))))
             .collect::<String>()
             .trim_end()
             .to_string()
+    }
+
+    pub fn biggest_file_size(&self) -> u64 {
+        self
+            .as_vec()
+            .iter()
+            .max_by(|&a, b| {
+                a.size().cmp(&b.size())
+            })
+            .unwrap()
+            .size()
+    }
+
+    pub fn biggest_file_hlink(&self) -> u64 {
+        self
+            .as_vec()
+            .iter()
+            .max_by(|&a, b| {
+                a.hlink_num().cmp(&b.hlink_num())
+            })
+            .unwrap()
+            .hlink_num()
     }
 }
 
@@ -162,14 +188,14 @@ impl File {
         &self.metadata
     }
 
-    pub fn long_fmt(&self) -> String {
+    pub fn long_fmt(&self, hlpad: usize, slpad: usize) -> String {
         format!("{}{} {} {} {} {} {} {}",
             self.file_type(),
             self.permissions(),
-            self.hlink_num(),
+            format!("{:>width$}", self.hlink_num(), width = hlpad),
             self.user().name().to_str().unwrap(),
             self.group().name().to_str().unwrap(),
-            self.size().to_string(),
+            format!("{:>width$}", self.size(), width = slpad),
             self.modified().format("%b %e %H:%M"),
             self.file_name(),
         )
