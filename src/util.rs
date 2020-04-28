@@ -26,3 +26,7 @@ pub fn count_digits(num: u64) -> usize {
         12
     }
 }
+
+pub fn is_hidden(file_name: &str) -> bool {
+    file_name.starts_with('.')
+}

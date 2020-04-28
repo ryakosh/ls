@@ -87,7 +87,7 @@ impl Files {
     pub fn biggest_file_size(&self) -> u64 {
         self.as_vec()
             .iter()
-            .max_by(|&a, b| a.size().cmp(&b.size()))
+            .max_by(|&a,& b| a.size().cmp(&b.size()))
             .unwrap()
             .size()
     }
@@ -95,7 +95,7 @@ impl Files {
     pub fn biggest_file_hlink(&self) -> u64 {
         self.as_vec()
             .iter()
-            .max_by(|&a, b| a.hlink_num().cmp(&b.hlink_num()))
+            .max_by(|&a, &b| a.hlink_num().cmp(&b.hlink_num()))
             .unwrap()
             .hlink_num()
     }
@@ -119,13 +119,23 @@ pub struct File {
     pathbuf: path::PathBuf,
     metadata: fs::Metadata,
     file_name: String,
+    fname_nrml: String, // Normalized file name to be used for ordering
 }
 
 impl File {
     pub fn new(pathbuf: path::PathBuf) -> Result<Self, failure::Error> {
+        let file_name = pathbuf.file_name().unwrap().to_str().unwrap().to_string();
+
+        let fname_nrml = if !util::is_hidden(&file_name) {
+            file_name.to_lowercase()
+        } else {
+            file_name.to_lowercase()[1..].into()
+        };
+
         Ok(Self {
             metadata: pathbuf.metadata()?,
-            file_name: pathbuf.file_name().unwrap().to_str().unwrap().to_string(),
+            file_name,
+            fname_nrml,
             pathbuf,
         })
     }
@@ -195,7 +205,7 @@ impl File {
     }
 
     fn is_hidden(&self) -> bool {
-        self.file_name().starts_with('.')
+        util::is_hidden(self.file_name())
     }
 }
 
@@ -214,15 +224,7 @@ impl cmp::PartialOrd for File {
 
 impl cmp::Ord for File {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let normalize = |f: &File| {
-            if !f.is_hidden() {
-                f.file_name().to_lowercase()
-            } else {
-                f.file_name().to_lowercase()[1..].into()
-            }
-        };
-
-        normalize(self).cmp(&normalize(other))
+        self.fname_nrml.cmp(&other.fname_nrml)
     }
 }
 
