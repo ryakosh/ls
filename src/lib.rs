@@ -2,8 +2,8 @@ pub mod error;
 pub mod util;
 
 use {
-    chrono::TimeZone as _, error::Error, futures::StreamExt as _, std::cmp, std::fmt, std::fs,
-    std::io, std::os::unix::fs::MetadataExt as _, std::path, tokio::fs::read_dir as tokio_read_dir,
+    chrono::TimeZone as _, error::Error, std::cmp, std::fmt, std::fs,
+    std::io, std::os::unix::fs::MetadataExt as _, std::path,
 };
 
 pub enum FileType {
@@ -29,12 +29,12 @@ impl fmt::Display for FileType {
 pub struct Files(Vec<File>);
 
 impl Files {
-    pub async fn new(path: &path::Path) -> Result<Self, failure::Error> {
-        match tokio_read_dir(path).await {
-            Ok(mut stream) => {
+    pub fn new(path: &path::Path) -> Result<Self, failure::Error> {
+        match fs::read_dir(path) {
+            Ok(dir_entries) => {
                 let mut files = vec![];
 
-                while let Some(dir_entry) = stream.next().await {
+                for dir_entry in dir_entries {
                     files.push(File::new(dir_entry?.path())?);
                 }
 

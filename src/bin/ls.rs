@@ -14,14 +14,13 @@ struct Opt {
     long: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), ExitFailure> {
+fn main() -> Result<(), ExitFailure> {
     let opt = Opt::from_args();
 
     let mut files = if let Some(file) = &opt.file {
-        Files::new(file.as_path()).await?
+        Files::new(file.as_path())?
     } else {
-        Files::new(path::Path::new(".")).await?
+        Files::new(path::Path::new("."))?
     };
 
     if !opt.all {
