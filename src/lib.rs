@@ -2,8 +2,8 @@ pub mod error;
 pub mod util;
 
 use {
-    chrono::TimeZone as _, error::Error, std::cmp, std::fmt, std::fs,
-    std::io, std::os::unix::fs::MetadataExt as _, std::path,
+    chrono::TimeZone as _, error::Error, std::cmp, std::fmt, std::fs, std::io,
+    std::os::unix::fs::MetadataExt as _, std::path,
 };
 
 pub enum FileType {
@@ -68,26 +68,21 @@ impl Files {
     }
 
     pub fn long_fmt(&self) -> String {
-        let bfs = self.biggest_file_size();
-        let bfh = self.biggest_file_hlink();
+        let hlpad = util::count_digits(self.biggest_file_hlink());
+        let slpad = util::count_digits(self.biggest_file_size());
 
-        self.as_vec()
-            .iter()
-            .map(|f| {
-                format!(
-                    "{} \n",
-                    f.long_fmt(util::count_digits(bfh), util::count_digits(bfs))
-                )
-            })
-            .collect::<String>()
-            .trim_end()
-            .to_string()
+        let lf = self.as_vec().iter().fold(String::new(), |mut acc, f| {
+            acc.push_str(&[&f.long_fmt(hlpad, slpad)[..], "\n"].concat());
+            acc
+        });
+
+        lf[..(lf.len() - 1)].to_string()
     }
 
     pub fn biggest_file_size(&self) -> u64 {
         self.as_vec()
             .iter()
-            .max_by(|&a,& b| a.size().cmp(&b.size()))
+            .max_by(|&a, &b| a.size().cmp(&b.size()))
             .unwrap()
             .size()
     }
@@ -103,15 +98,12 @@ impl Files {
 
 impl fmt::Display for Files {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let files = self
-            .as_vec()
-            .iter()
-            .map(|f| format!("{} ", f.to_string()))
-            .collect::<String>()
-            .trim_end()
-            .to_string();
+        let files = self.as_vec().iter().fold(String::new(), |mut acc, file| {
+            acc.push_str(&[file.file_name(), " "].concat());
+            acc
+        });
 
-        write!(f, "{}", files)
+        write!(f, "{}", &files[..(files.len() - 1)])
     }
 }
 #[derive(Debug)]
@@ -192,15 +184,17 @@ impl File {
 
     pub fn long_fmt(&self, hlpad: usize, slpad: usize) -> String {
         format!(
-            "{}{} {} {} {} {} {} {}",
+            "{}{} {:>hlpad$} {} {} {:>slpad$} {} {}",
             self.file_type(),
             self.permissions(),
-            format!("{:>width$}", self.hlink_num(), width = hlpad),
+            self.hlink_num(),
             self.user().name().to_str().unwrap(),
             self.group().name().to_str().unwrap(),
-            format!("{:>width$}", self.size(), width = slpad),
+            self.size(),
             self.modified().format("%b %e %H:%M"),
             self.file_name(),
+            hlpad = hlpad,
+            slpad = slpad,
         )
     }
 
